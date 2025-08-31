@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VilloApp - Real-time Villo Beschikbaarheid</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="../styles/styles.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">VilloApp Brussels</div>
+                <div class="header-controls">
+                    <button class="btn-icon" id="geolocateBtn" title="Gebruik mijn locatie">📍</button>
+                    <select id="languageSelect">
+                        <option value="nl">Nederlands</option>
+                        <option value="fr">Français</option>
+                        <option value="en">English</option>
+                    </select>
+                    <button class="btn-icon" id="themeToggle" title="Wissel thema">🌙</button>
+                    <button class="btn-icon" id="refreshBtn" title="Ververs data">🔄</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Statistics -->
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-label">Totaal Stations</div>
+                <div class="stat-value" id="totalStations">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Beschikbare Fietsen</div>
+                <div class="stat-value" id="totalBikes">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Vrije Plekken</div>
+                <div class="stat-value" id="totalSlots">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Favorieten</div>
+                <div class="stat-value" id="totalFavorites">0</div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label for="searchInput">🔍 Zoek station</label>
+                    <input type="text" id="searchInput" placeholder="Naam of adres...">
+                </div>
+                <div class="control-group">
+                    <label for="availabilityFilter">🚲 Beschikbaarheid</label>
+                    <select id="availabilityFilter">
+                        <option value="">Alle stations</option>
+                        <option value="high">Veel fietsen (>10)</option>
+                        <option value="medium">Gemiddeld (5-10)</option>
+                        <option value="low">Weinig (<5)</option>
+                        <option value="none">Geen fietsen</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="sortSelect">📊 Sorteer op</label>
+                    <select id="sortSelect">
+                        <option value="name">Naam</option>
+                        <option value="bikes">Beschikbare fietsen</option>
+                        <option value="slots">Vrije plekken</option>
+                        <option value="distance">Afstand</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>&nbsp;</label>
+                    <button id="showFavoritesBtn">⭐ Toon favorieten</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- View Toggle -->
+        <div class="view-toggle">
+            <button class="view-btn active" data-view="table">📋 Tabel</button>
+            <button class="view-btn" data-view="map">🗺️ Kaart</button>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Data wordt geladen...</p>
+        </div>
+
+        <!-- Table View -->
+        <div id="tableView" class="table-container">
+            <table id="stationsTable">
+                <thead>
+                    <tr>
+                        <th>Favoriet</th>
+                        <th class="sortable" data-sort="name">Station</th>
+                        <th class="sortable" data-sort="address">Adres</th>
+                        <th class="sortable" data-sort="bikes">🚲 Beschikbaar</th>
+                        <th class="sortable" data-sort="slots">🅿️ Vrije plekken</th>
+                        <th class="sortable" data-sort="capacity">Capaciteit</th>
+                        <th>Status</th>
+                        <th class="sortable" data-sort="distance">Afstand</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                </tbody>
+            </table>
+            <div class="no-results" id="noResults" style="display: none;">
+                <h3>Geen resultaten gevonden</h3>
+                <p>Probeer je zoekcriteria aan te passen</p>
+            </div>
+        </div>
+
+        <!-- Map View -->
+        <div id="mapView" style="display: none;">
+            <div id="map"></div>
+        </div>
+    </main>
+
+    <!-- Notification -->
+    <div class="notification" id="notification">
+        <span id="notificationText"></span>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="../js/script.js"></script>
+</body>
+</html>
