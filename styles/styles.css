@@ -114,6 +114,7 @@ header {
 .error-content p {
     margin-bottom: 1rem;
     opacity: 0.8;
+    white-space: pre-line;
 }
 
 .error-content button {
@@ -319,7 +320,7 @@ button.active {
 table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 800px; /* Ensure table doesn't get too squashed */
+    min-width: 800px;
 }
 
 thead {

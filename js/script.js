@@ -12,8 +12,7 @@ const app = {
     sortField: 'name',
     sortDirection: 'asc',
     isLoading: false,
-    retryCount: 0,
-    maxRetries: 3
+    API_ENDPOINT: 'api.php' // PHP API endpoint
 };
 
 // Translations
@@ -62,9 +61,6 @@ document.addEventListener('DOMContentLoaded', () => {
     attachEventListeners();
     fetchStations();
     initializeMap();
-    
-    // Setup Intersection Observer for lazy loading
-    setupIntersectionObserver();
 });
 
 // Initialize application settings
@@ -80,7 +76,7 @@ const initializeApp = () => {
     updateStats();
 };
 
-// ✅ BIJGEWERKTE API FUNCTIE - Gebruikt de correcte Villo API
+// Fetch stations from PHP API
 const fetchStations = async () => {
     if (app.isLoading) return;
     
@@ -91,59 +87,42 @@ const fetchStations = async () => {
     loading.classList.add('active');
     errorMessage.style.display = 'none';
     
-    // ✅ JUISTE API URL - Exact de URL die jij hebt gegeven
-    const apiUrl = 'https://opendata.brussels.be/api/explore/v2.1/catalog/datasets/disponibilite-en-temps-reel-des-velos-villo-rbc/records?limit=343';
-    const corsProxy = 'https://api.allorigins.win/get?url=';
-    
     try {
-        let data = null;
-        
-        // Probeer eerst directe API call (werkt op localhost)
-        try {
-            console.log('Probeer directe API call...');
-            const directResponse = await fetch(apiUrl);
-            if (directResponse.ok) {
-                data = await directResponse.json();
-                console.log('✓ Directe API call succesvol');
+        // Call PHP API endpoint
+        const response = await fetch(`${app.API_ENDPOINT}?action=getStations`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
             }
-        } catch (directError) {
-            console.log('Directe API gefaald, probeer CORS proxy...');
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        // Als directe call faalt, probeer CORS proxy
-        if (!data) {
-            const proxyUrl = corsProxy + encodeURIComponent(apiUrl);
-            const proxyResponse = await fetch(proxyUrl);
-            
-            if (proxyResponse.ok) {
-                const proxyData = await proxyResponse.json();
-                if (proxyData.contents) {
-                    data = JSON.parse(proxyData.contents);
-                    console.log('✓ CORS proxy call succesvol');
-                }
-            }
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to fetch data');
         }
         
-        if (!data) {
-            throw new Error('Geen data beschikbaar van API endpoints');
-        }
-        
-        console.log('API Response:', data);
-        
-        // ✅ CORRECTE DATA STRUCTUUR - Gebruikt jouw API response format
+        // Extract stations data
+        const data = result.data;
         const records = data.results || [];
         
         if (records.length === 0) {
-            throw new Error('Geen stations gevonden in API response');
+            throw new Error('No stations found in API response');
         }
         
+        // Process the station data
         app.stations = processStationData(records);
         app.filteredStations = [...app.stations];
-        app.retryCount = 0;
         
         updateDisplay();
         updateStats();
-        showNotification(`${translations[app.language].dataRefreshed} (${records.length} stations)`, 'success', 5000);
+        showNotification(`${translations[app.language].dataRefreshed} (${records.length} stations)`, 'success');
+        
+        console.log(`Successfully loaded ${records.length} stations`);
         
     } catch (error) {
         console.error('Error fetching data:', error);
@@ -154,20 +133,15 @@ const fetchStations = async () => {
     }
 };
 
-// ✅ BIJGEWERKTE ERROR HANDLING - Met betere instructies
+// Handle fetch errors
 const handleFetchError = (error) => {
     const errorMessage = document.getElementById('errorMessage');
     const errorText = document.getElementById('errorText');
     
     let message = translations[app.language].apiError;
     
-    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-        message = `${translations[app.language].networkError}
-        
-Voor lokaal testen:
-• Start een lokale server: python -m http.server 8000
-• Of gebruik Live Server extensie in VS Code
-• Browser CORS policy blokkeert directe API calls`;
+    if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+        message = translations[app.language].networkError;
     } else {
         message += `: ${error.message}`;
     }
@@ -175,24 +149,13 @@ Voor lokaal testen:
     errorText.textContent = message;
     errorMessage.style.display = 'block';
     
-    // Probeer het opnieuw maar minder agressief
-    if (app.retryCount < 1) {
-        app.retryCount++;
-        showNotification(`${translations[app.language].retrying}...`, 'warning');
-        setTimeout(() => {
-            fetchStations();
-        }, 3000);
-    } else {
-        showNotification('API niet beschikbaar - start lokale server voor testing', 'error', 8000);
-    }
+    showNotification(message, 'error', 5000);
 };
 
-// ✅ CORRECTE DATA PROCESSING - Gebruikt exacte veldnamen uit jouw API
+// Process station data from API
 const processStationData = (records) => {
-    console.log('Processing station data. Sample record:', records[0]);
-    
     return records.map(record => {
-        // ✅ JUISTE VELDNAMEN - Exact zoals in jouw API response
+        // Language-specific fields
         const name = app.language === 'fr' ? 
             (record.name_fr || record.name_nl || 'Station sans nom') : 
             (record.name_nl || record.name_fr || 'Station zonder naam');
@@ -201,16 +164,16 @@ const processStationData = (records) => {
             (record.address_fr || record.address_nl || 'Adresse inconnue') : 
             (record.address_nl || record.address_fr || 'Adres onbekend');
         
-        // ✅ CORRECTE MAPPING - Exact zoals jouw API data
+        // Parse numerical values
         const availableBikes = parseInt(record.available_bikes || 0);
         const availableSlots = parseInt(record.available_bike_stands || 0);
         const capacity = parseInt(record.bike_stands || 0);
         
-        // ✅ COORDINATEN - Van geo_point_2d object
+        // Coordinates
         const lat = record.geo_point_2d ? parseFloat(record.geo_point_2d.lat) : 0;
         const lng = record.geo_point_2d ? parseFloat(record.geo_point_2d.lon) : 0;
         
-        // ✅ ID - Van number veld
+        // Station ID
         const id = record.number || Math.random().toString(36);
         
         return {
@@ -222,7 +185,7 @@ const processStationData = (records) => {
             capacity: capacity,
             lat: lat,
             lng: lng,
-            status: 'OPEN',
+            status: record.status || 'OPEN',
             isFavorite: app.favorites.includes(id.toString()),
             distance: null,
             municipality: app.language === 'fr' ? record.mu_fr : record.mu_nl,
@@ -230,10 +193,10 @@ const processStationData = (records) => {
             lastUpdate: record.last_update
         };
     }).filter(station => {
-        // Filter stations met ongeldige coordinaten
+        // Filter out stations with invalid coordinates
         return station.lat !== 0 && station.lng !== 0 && 
                !isNaN(station.lat) && !isNaN(station.lng) &&
-               Math.abs(station.lat - 50.8) < 0.3 && // Brussels gebied check
+               Math.abs(station.lat - 50.8) < 0.3 && // Brussels area check
                Math.abs(station.lng - 4.35) < 0.3;
     });
 };
@@ -399,7 +362,7 @@ const updateMap = () => {
         app.markers.push(userMarker);
     }
     
-    // Fit map to show all markers if we have stations
+    // Fit map to show all markers
     if (app.filteredStations.length > 0) {
         const group = new L.featureGroup(app.markers.filter(m => m._latlng));
         if (group.getLayers().length > 0) {
@@ -419,8 +382,8 @@ const updateStats = () => {
     document.getElementById('totalFavorites').textContent = app.favorites.length;
 };
 
-// Toggle favorite status
-const toggleFavorite = (stationId) => {
+// Toggle favorite status (global function for onclick)
+window.toggleFavorite = (stationId) => {
     const station = app.stations.find(s => s.id.toString() === stationId.toString());
     if (!station) return;
     
@@ -503,7 +466,7 @@ const sortStations = () => {
     updateDisplay();
 };
 
-// ✅ VERBETERDE NOTIFICATION FUNCTIE - Ondersteunt custom durations
+// Show notification
 const showNotification = (message, type = 'success', duration = 3000) => {
     const notification = document.getElementById('notification');
     const notificationText = document.getElementById('notificationText');
@@ -577,28 +540,6 @@ const getUserLocation = () => {
             enableHighAccuracy: true
         }
     );
-};
-
-// Setup Intersection Observer for lazy loading
-const setupIntersectionObserver = () => {
-    const observerOptions = {
-        root: null,
-        rootMargin: '50px',
-        threshold: 0.1
-    };
-    
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('fade-in');
-            }
-        });
-    }, observerOptions);
-    
-    // Observe stat cards
-    document.querySelectorAll('.stat-card').forEach(card => {
-        observer.observe(card);
-    });
 };
 
 // Validate form inputs
@@ -698,13 +639,11 @@ const attachEventListeners = () => {
     
     // Refresh button
     document.getElementById('refreshBtn').addEventListener('click', () => {
-        app.retryCount = 0; // Reset retry count on manual refresh
         fetchStations();
     });
     
     // Retry button in error message
-    document.getElementById('retryBtn') && document.getElementById('retryBtn').addEventListener('click', () => {
-        app.retryCount = 0;
+    document.getElementById('retryBtn').addEventListener('click', () => {
         fetchStations();
     });
     
@@ -737,37 +676,6 @@ const attachEventListeners = () => {
         showNotification('No internet connection', 'error');
     });
     
-    // Save scroll position
-    let scrollTimeout;
-    window.addEventListener('scroll', () => {
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-            localStorage.setItem('villoScrollPosition', window.scrollY);
-        }, 100);
-    });
-    
-    // Restore scroll position
-    const savedScrollPosition = localStorage.getItem('villoScrollPosition');
-    if (savedScrollPosition) {
-        setTimeout(() => {
-            window.scrollTo(0, parseInt(savedScrollPosition));
-        }, 100);
-    }
-    
-    // Handle visibility change (tab switching)
-    document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && !app.isLoading) {
-            // Refresh data when tab becomes visible
-            const lastRefresh = localStorage.getItem('villoLastRefresh');
-            const now = Date.now();
-            
-            if (!lastRefresh || now - parseInt(lastRefresh) > 60000) {
-                fetchStations();
-                localStorage.setItem('villoLastRefresh', now.toString());
-            }
-        }
-    });
-    
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         // Ctrl/Cmd + K for search focus
@@ -776,11 +684,10 @@ const attachEventListeners = () => {
             document.getElementById('searchInput').focus();
         }
         
-        // Ctrl/Cmd + R for refresh (prevent default browser refresh)
+        // Ctrl/Cmd + R for refresh
         if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
             e.preventDefault();
             if (!app.isLoading) {
-                app.retryCount = 0;
                 fetchStations();
             }
         }
@@ -793,11 +700,3 @@ const attachEventListeners = () => {
         }
     });
 };
-
-// Service Worker registration for offline support (optional enhancement)
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-        // Service worker registration failed, app will work without offline support
-        console.log('Service worker not available, app will work without offline support');
-    });
-}

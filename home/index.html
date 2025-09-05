@@ -3,12 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VilloApp - Real time Beschikbaarheid</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="../styles/styles.css">
-    <link rel="stylesheet" href="../js/script.js">
+    <title>VilloApp - Real-time Bike Availability Brussels</title>
+    
+    <!-- Leaflet CSS for Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+          crossorigin=""/>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+    <!-- Header -->
     <header>
         <div class="container">
             <div class="header-content">
@@ -27,6 +33,7 @@
         </div>
     </header>
 
+    <!-- Main Content -->
     <main class="container">
         <!-- Error Message -->
         <div class="error-message" id="errorMessage" style="display: none;">
@@ -37,7 +44,7 @@
             </div>
         </div>
 
-        <!-- Statistics -->
+        <!-- Statistics Cards -->
         <div class="stats-container">
             <div class="stat-card">
                 <div class="stat-label">Totaal Stations</div>
@@ -57,7 +64,7 @@
             </div>
         </div>
 
-        <!-- Controls -->
+        <!-- Filter Controls -->
         <div class="controls">
             <div class="controls-grid">
                 <div class="control-group">
@@ -118,6 +125,7 @@
                     </tr>
                 </thead>
                 <tbody id="tableBody">
+                    <!-- Table rows will be inserted here by JavaScript -->
                 </tbody>
             </table>
             <div class="no-results" id="noResults" style="display: none;">
@@ -132,12 +140,18 @@
         </div>
     </main>
 
-    <!-- Notification -->
+    <!-- Notification Toast -->
     <div class="notification" id="notification">
         <span id="notificationText"></span>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="../js/script.js"></script>
+    <!-- Scripts -->
+    <!-- Leaflet JS for Maps -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+            crossorigin=""></script>
+    
+    <!-- Custom JavaScript -->
+    <script src="js/script.js"></script>
 </body>
 </html>
