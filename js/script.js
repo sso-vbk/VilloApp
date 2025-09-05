@@ -80,7 +80,7 @@ const initializeApp = () => {
     updateStats();
 };
 
-// Fetch stations data from API with correct structure
+// ✅ BIJGEWERKTE API FUNCTIE - Gebruikt de correcte Villo API
 const fetchStations = async () => {
     if (app.isLoading) return;
     
@@ -91,18 +91,46 @@ const fetchStations = async () => {
     loading.classList.add('active');
     errorMessage.style.display = 'none';
     
+    // ✅ JUISTE API URL - Exact de URL die jij hebt gegeven
+    const apiUrl = 'https://opendata.brussels.be/api/explore/v2.1/catalog/datasets/disponibilite-en-temps-reel-des-velos-villo-rbc/records?limit=343';
+    const corsProxy = 'https://api.allorigins.win/get?url=';
+    
     try {
-        // Correct API endpoint based on the provided structure
-        const response = await fetch('https://opendata.brussels.be/api/explore/v2.1/catalog/datasets/disponibilite-en-temps-reel-des-velos-villo-rbc/records?limit=100&timezone=Europe%2FBrussels');
+        let data = null;
         
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Probeer eerst directe API call (werkt op localhost)
+        try {
+            console.log('Probeer directe API call...');
+            const directResponse = await fetch(apiUrl);
+            if (directResponse.ok) {
+                data = await directResponse.json();
+                console.log('✓ Directe API call succesvol');
+            }
+        } catch (directError) {
+            console.log('Directe API gefaald, probeer CORS proxy...');
         }
         
-        const data = await response.json();
+        // Als directe call faalt, probeer CORS proxy
+        if (!data) {
+            const proxyUrl = corsProxy + encodeURIComponent(apiUrl);
+            const proxyResponse = await fetch(proxyUrl);
+            
+            if (proxyResponse.ok) {
+                const proxyData = await proxyResponse.json();
+                if (proxyData.contents) {
+                    data = JSON.parse(proxyData.contents);
+                    console.log('✓ CORS proxy call succesvol');
+                }
+            }
+        }
+        
+        if (!data) {
+            throw new Error('Geen data beschikbaar van API endpoints');
+        }
+        
         console.log('API Response:', data);
         
-        // Use the correct field name from API response
+        // ✅ CORRECTE DATA STRUCTUUR - Gebruikt jouw API response format
         const records = data.results || [];
         
         if (records.length === 0) {
@@ -111,11 +139,11 @@ const fetchStations = async () => {
         
         app.stations = processStationData(records);
         app.filteredStations = [...app.stations];
-        app.retryCount = 0; // Reset retry count on success
+        app.retryCount = 0;
         
         updateDisplay();
         updateStats();
-        showNotification(translations[app.language].dataRefreshed);
+        showNotification(`${translations[app.language].dataRefreshed} (${records.length} stations)`, 'success', 5000);
         
     } catch (error) {
         console.error('Error fetching data:', error);
@@ -126,7 +154,7 @@ const fetchStations = async () => {
     }
 };
 
-// Handle fetch errors with retry logic
+// ✅ BIJGEWERKTE ERROR HANDLING - Met betere instructies
 const handleFetchError = (error) => {
     const errorMessage = document.getElementById('errorMessage');
     const errorText = document.getElementById('errorText');
@@ -134,7 +162,12 @@ const handleFetchError = (error) => {
     let message = translations[app.language].apiError;
     
     if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-        message = translations[app.language].networkError;
+        message = `${translations[app.language].networkError}
+        
+Voor lokaal testen:
+• Start een lokale server: python -m http.server 8000
+• Of gebruik Live Server extensie in VS Code
+• Browser CORS policy blokkeert directe API calls`;
     } else {
         message += `: ${error.message}`;
     }
@@ -142,22 +175,24 @@ const handleFetchError = (error) => {
     errorText.textContent = message;
     errorMessage.style.display = 'block';
     
-    // Auto-retry logic
-    if (app.retryCount < app.maxRetries) {
+    // Probeer het opnieuw maar minder agressief
+    if (app.retryCount < 1) {
         app.retryCount++;
-        showNotification(`${translations[app.language].retrying} (${app.retryCount}/${app.maxRetries})`, 'warning');
+        showNotification(`${translations[app.language].retrying}...`, 'warning');
         setTimeout(() => {
             fetchStations();
-        }, 2000 * app.retryCount); // Exponential backoff
+        }, 3000);
+    } else {
+        showNotification('API niet beschikbaar - start lokale server voor testing', 'error', 8000);
     }
 };
 
-// Process raw station data based on correct API structure
+// ✅ CORRECTE DATA PROCESSING - Gebruikt exacte veldnamen uit jouw API
 const processStationData = (records) => {
     console.log('Processing station data. Sample record:', records[0]);
     
     return records.map(record => {
-        // Direct field access based on API structure shown
+        // ✅ JUISTE VELDNAMEN - Exact zoals in jouw API response
         const name = app.language === 'fr' ? 
             (record.name_fr || record.name_nl || 'Station sans nom') : 
             (record.name_nl || record.name_fr || 'Station zonder naam');
@@ -166,16 +201,16 @@ const processStationData = (records) => {
             (record.address_fr || record.address_nl || 'Adresse inconnue') : 
             (record.address_nl || record.address_fr || 'Adres onbekend');
         
-        // Map availability fields correctly
+        // ✅ CORRECTE MAPPING - Exact zoals jouw API data
         const availableBikes = parseInt(record.available_bikes || 0);
         const availableSlots = parseInt(record.available_bike_stands || 0);
         const capacity = parseInt(record.bike_stands || 0);
         
-        // Extract coordinates from geo_point_2d
+        // ✅ COORDINATEN - Van geo_point_2d object
         const lat = record.geo_point_2d ? parseFloat(record.geo_point_2d.lat) : 0;
         const lng = record.geo_point_2d ? parseFloat(record.geo_point_2d.lon) : 0;
         
-        // Use number as ID
+        // ✅ ID - Van number veld
         const id = record.number || Math.random().toString(36);
         
         return {
@@ -187,7 +222,7 @@ const processStationData = (records) => {
             capacity: capacity,
             lat: lat,
             lng: lng,
-            status: 'OPEN', // Assume open if in API
+            status: 'OPEN',
             isFavorite: app.favorites.includes(id.toString()),
             distance: null,
             municipality: app.language === 'fr' ? record.mu_fr : record.mu_nl,
@@ -195,11 +230,11 @@ const processStationData = (records) => {
             lastUpdate: record.last_update
         };
     }).filter(station => {
-        // Filter out stations with invalid coordinates
+        // Filter stations met ongeldige coordinaten
         return station.lat !== 0 && station.lng !== 0 && 
                !isNaN(station.lat) && !isNaN(station.lng) &&
-               Math.abs(station.lat - 50.8) < 0.3 && // Brussels area latitude check
-               Math.abs(station.lng - 4.35) < 0.3;   // Brussels area longitude check
+               Math.abs(station.lat - 50.8) < 0.3 && // Brussels gebied check
+               Math.abs(station.lng - 4.35) < 0.3;
     });
 };
 
@@ -468,8 +503,8 @@ const sortStations = () => {
     updateDisplay();
 };
 
-// Show notification
-const showNotification = (message, type = 'success') => {
+// ✅ VERBETERDE NOTIFICATION FUNCTIE - Ondersteunt custom durations
+const showNotification = (message, type = 'success', duration = 3000) => {
     const notification = document.getElementById('notification');
     const notificationText = document.getElementById('notificationText');
     
@@ -484,13 +519,16 @@ const showNotification = (message, type = 'success') => {
         case 'warning':
             notification.style.background = 'var(--warning-color)';
             break;
+        case 'info':
+            notification.style.background = 'var(--secondary-color)';
+            break;
         default:
             notification.style.background = 'var(--success-color)';
     }
     
     setTimeout(() => {
         notification.classList.remove('show');
-    }, 3000);
+    }, duration);
 };
 
 // Toggle theme
