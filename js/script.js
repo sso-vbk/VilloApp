@@ -12,7 +12,8 @@ const app = {
     sortField: 'name',
     sortDirection: 'asc',
     isLoading: false,
-    API_ENDPOINT: 'api.php' // PHP API endpoint
+    API_ENDPOINT: 'api.php', // PHP API endpoint
+    FALLBACK_API: 'https://api.allorigins.win/get?url=' // Fallback CORS proxy
 };
 
 // Translations
@@ -76,7 +77,7 @@ const initializeApp = () => {
     updateStats();
 };
 
-// Fetch stations from PHP API
+// Fetch stations from PHP API with fallback
 const fetchStations = async () => {
     if (app.isLoading) return;
     
@@ -88,22 +89,17 @@ const fetchStations = async () => {
     errorMessage.style.display = 'none';
     
     try {
-        // Call PHP API endpoint
-        const response = await fetch(`${app.API_ENDPOINT}?action=getStations`, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-            }
-        });
+        // Try PHP API first
+        let result = await tryPhpApi();
         
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        // If PHP API fails, try fallback
+        if (!result.success) {
+            console.warn('PHP API failed, trying fallback...');
+            result = await tryFallbackApi();
         }
         
-        const result = await response.json();
-        
         if (!result.success) {
-            throw new Error(result.error || 'Failed to fetch data');
+            throw new Error(result.error || 'Failed to fetch data from all sources');
         }
         
         // Extract stations data
@@ -133,6 +129,58 @@ const fetchStations = async () => {
     }
 };
 
+// Try PHP API
+const tryPhpApi = async () => {
+    try {
+        const response = await fetch(`${app.API_ENDPOINT}?action=getStations`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        return result;
+        
+    } catch (error) {
+        return {
+            success: false,
+            error: `PHP API Error: ${error.message}`
+        };
+    }
+};
+
+// Try fallback API (direct with CORS proxy)
+const tryFallbackApi = async () => {
+    try {
+        const apiUrl = 'https://opendata.brussels.be/api/explore/v2.1/catalog/datasets/bike-sharing-availability/records?limit=100&refine=type%3A%22Station%22';
+        const response = await fetch(app.FALLBACK_API + encodeURIComponent(apiUrl));
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        const data = JSON.parse(result.contents);
+        
+        return {
+            success: true,
+            data: data,
+            timestamp: new Date().toISOString()
+        };
+        
+    } catch (error) {
+        return {
+            success: false,
+            error: `Fallback API Error: ${error.message}`
+        };
+    }
+};
+
 // Handle fetch errors
 const handleFetchError = (error) => {
     const errorMessage = document.getElementById('errorMessage');
@@ -155,26 +203,38 @@ const handleFetchError = (error) => {
 // Process station data from API
 const processStationData = (records) => {
     return records.map(record => {
-        // Language-specific fields
+        // Language-specific fields - handle both API formats
         const name = app.language === 'fr' ? 
-            (record.name_fr || record.name_nl || 'Station sans nom') : 
-            (record.name_nl || record.name_fr || 'Station zonder naam');
+            (record.name_fr || record.nom || record.name_nl || record.name || 'Station sans nom') : 
+            (record.name_nl || record.name || record.name_fr || record.nom || 'Station zonder naam');
             
         const address = app.language === 'fr' ? 
-            (record.address_fr || record.address_nl || 'Adresse inconnue') : 
-            (record.address_nl || record.address_fr || 'Adres onbekend');
+            (record.address_fr || record.adresse || record.address_nl || record.address || 'Adresse inconnue') : 
+            (record.address_nl || record.address || record.address_fr || record.adresse || 'Adres onbekend');
         
         // Parse numerical values
-        const availableBikes = parseInt(record.available_bikes || 0);
-        const availableSlots = parseInt(record.available_bike_stands || 0);
-        const capacity = parseInt(record.bike_stands || 0);
+        const availableBikes = parseInt(record.available_bikes || record.available_bike || 0);
+        const availableSlots = parseInt(record.available_bike_stands || record.available_stands || 0);
+        const capacity = parseInt(record.bike_stands || record.stands || 0);
         
-        // Coordinates
-        const lat = record.geo_point_2d ? parseFloat(record.geo_point_2d.lat) : 0;
-        const lng = record.geo_point_2d ? parseFloat(record.geo_point_2d.lon) : 0;
+        // Coordinates - handle multiple formats
+        let lat = 0, lng = 0;
+        
+        if (record.latitude && record.longitude) {
+            lat = parseFloat(record.latitude);
+            lng = parseFloat(record.longitude);
+        } else if (record.geo_point_2d) {
+            if (typeof record.geo_point_2d === 'object') {
+                lat = parseFloat(record.geo_point_2d.lat || record.geo_point_2d[0] || 0);
+                lng = parseFloat(record.geo_point_2d.lon || record.geo_point_2d.lng || record.geo_point_2d[1] || 0);
+            }
+        } else if (record.lat && record.lng) {
+            lat = parseFloat(record.lat);
+            lng = parseFloat(record.lng);
+        }
         
         // Station ID
-        const id = record.number || Math.random().toString(36);
+        const id = record.id || record.number || record.station_id || Math.random().toString(36);
         
         return {
             id: id,
@@ -188,9 +248,9 @@ const processStationData = (records) => {
             status: record.status || 'OPEN',
             isFavorite: app.favorites.includes(id.toString()),
             distance: null,
-            municipality: app.language === 'fr' ? record.mu_fr : record.mu_nl,
-            postalCode: record.pccp,
-            lastUpdate: record.last_update
+            municipality: app.language === 'fr' ? (record.mu_fr || record.municipality) : (record.mu_nl || record.municipality),
+            postalCode: record.pccp || record.postal_code,
+            lastUpdate: record.last_update || new Date().toISOString()
         };
     }).filter(station => {
         // Filter out stations with invalid coordinates
